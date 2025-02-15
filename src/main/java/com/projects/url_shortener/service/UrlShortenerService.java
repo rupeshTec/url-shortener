@@ -19,6 +19,9 @@ public class UrlShortenerService {
     @Autowired
     private UrlMappingRepository repository;
 
+    @Autowired
+    private CaffeineCacheService cacheService;
+
     public String generateShortUrl(String longUrl) {
         Optional<UrlMapping> existing = repository.findByLongUrl(longUrl);
         if (existing.isPresent()) {
@@ -40,13 +43,25 @@ public class UrlShortenerService {
         // String shortUrl = RandomStringUtils.randomAlphanumeric(6); // Generates a 6-character short URL
         UrlMapping urlMapping = new UrlMapping(null, shortUrl, longUrl, null);
         repository.save(urlMapping);
+
+        // Save in Caffeine cache
+        cacheService.saveToCache(shortUrl, longUrl);
+
         return shortUrl;
     }
 
     public String getLongUrl(String shortUrl) {
+
+        // First check Caffeine Cache
+        String cachedUrl = cacheService.getFromCache(shortUrl.substring(shortUrl.lastIndexOf("/") + 1));
+        if (cachedUrl != null) {
+            return cachedUrl;
+        }
+    
         return repository.findByShortUrl(shortUrl.substring(shortUrl.lastIndexOf("/") + 1))
                 .map(UrlMapping::getLongUrl)
                 .orElseThrow(() -> new RuntimeException("Short URL not found!"));
     }
+    
 }
 
